@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sinau Agentic — Architecture &amp; Flow</title>
+<meta name="author" content="{{AUTHOR}}">
+<meta name="description" content="A comprehensive technical walkthrough of the Sinau Agentic platform: an agentic AI research assistant built on the ReAct pattern, Ollama, Flask, and React. Covers system architecture, tool ecosystem, memory, RAG, and the SSE streaming pipeline.">
+<meta name="keywords" content="agentic AI, ReAct pattern, Ollama, Flask, SSE, RAG, Garuda, academic research, agent architecture">
+<meta name="generator" content="Kami">
+<style>
+  @font-face { font-family: "JetBrains Mono"; src: url("../fonts/JetBrainsMono.woff2") format("woff2"); font-weight: 400; font-style: normal; }
+  @font-face { font-family: "JetBrains Mono"; src: url("../fonts/JetBrainsMono.woff2") format("woff2"); font-weight: 500; font-style: normal; }
+
+  @page {
+    size: A4;
+    margin: 20mm 22mm 22mm 22mm;
+    background: #f5f4ed;
+
+    @top-right {
+      content: string(section-title);
+      font-family: Charter, Georgia, Palatino, serif;
+      font-size: 8pt;
+      color: #6b6a64;
+    }
+
+    @bottom-center {
+      content: counter(page) "  &middot;  Sinau Agentic";
+      font-family: Charter, Georgia, Palatino, serif;
+      font-size: 9pt;
+      color: #6b6a64;
+    }
+  }
+  @page:first {
+    @top-right { content: ""; }
+    @bottom-center { content: ""; }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --parchment: #f5f4ed;
+    --ivory:     #faf9f5;
+    --near-black:#141413;
+    --dark-warm: #3d3d3a;
+    --olive:     #504e49;
+    --stone:     #6b6a64;
+    --brand:     #1B365D;
+    --border:    #e8e6dc;
+    --border-soft:#e5e3d8;
+    --tag-bg:    #E4ECF5;
+
+    --serif: Charter, Georgia,
+             Palatino, "Times New Roman", serif;
+    --sans: var(--serif);
+    --mono:  "JetBrains Mono", "SF Mono", "Fira Code",
+             Consolas, Monaco, monospace;
+
+    --rhythm-module:  14pt;
+    --rhythm-section: 18pt;
+  }
+
+  html, body { background: var(--parchment); }
+
+  @media screen {
+    body { max-width: 210mm; margin: 0 auto; padding: 20mm 22mm 22mm 22mm; }
+  }
+
+  body {
+    color: var(--near-black);
+    font-family: var(--serif);
+    font-size: 10.5pt;
+    line-height: 1.55;
+    widows: 3;
+    orphans: 3;
+  }
+
+  .sans { font-family: var(--sans); }
+
+  h1 {
+    font-size: 24pt;
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.3pt;
+    margin: 0 0 10pt 0;
+    border-left: 2.5pt solid var(--brand);
+    border-radius: 1.5pt;
+    padding-left: 8pt;
+    color: var(--near-black);
+    break-after: avoid;
+  }
+  h2 {
+    font-size: 16pt;
+    font-weight: 500;
+    line-height: 1.25;
+    margin: 24pt 0 8pt 0;
+    color: var(--near-black);
+    break-after: avoid;
+    string-set: section-title content();
+  }
+  h3 {
+    font-size: 13pt;
+    font-weight: 500;
+    line-height: 1.3;
+    margin: 18pt 0 6pt 0;
+    color: var(--dark-warm);
+    break-after: avoid;
+  }
+
+  .chapter-num {
+    font-family: var(--sans);
+    font-size: 10pt;
+    color: var(--brand);
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin-bottom: 6pt;
+  }
+
+  p { margin: 0 0 10pt 0; line-height: 1.55; color: var(--near-black); widows: 2; orphans: 2; }
+
+  .lead {
+    font-size: 12pt;
+    line-height: 1.55;
+    color: var(--dark-warm);
+    margin-bottom: var(--rhythm-module);
+  }
+
+  .hl { color: var(--brand); font-weight: 500; }
+  strong { font-weight: 500; }
+
+  ul, ol {
+    margin: 6pt 0 10pt 0;
+    padding-left: 20pt;
+    line-height: 1.55;
+  }
+  ul li::marker { color: var(--brand); }
+  ol li::marker { color: var(--brand); font-weight: 500; }
+
+  blockquote, .quote {
+    border-left: 2pt solid var(--brand);
+    margin: 12pt 0;
+    padding: 4pt 0 4pt 16pt;
+    color: var(--olive);
+    line-height: 1.55;
+    break-inside: avoid;
+  }
+  blockquote .cite, .quote .cite {
+    display: block;
+    font-family: var(--sans);
+    font-size: 9pt;
+    color: var(--stone);
+    margin-top: 4pt;
+  }
+
+  code {
+    font-family: var(--mono);
+    font-size: 9pt;
+    background: var(--ivory);
+    padding: 1pt 4pt;
+    border-radius: 2pt;
+    color: var(--dark-warm);
+  }
+  pre {
+    font-family: var(--mono);
+    font-size: 9pt;
+    line-height: 1.5;
+    background: var(--ivory);
+    border-radius: 4pt;
+    padding: 10pt 14pt;
+    margin: 10pt 0;
+    white-space: pre-wrap;
+    color: var(--near-black);
+    break-inside: avoid;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+
+  table, .kami-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+    margin: 12pt 0;
+    break-inside: avoid;
+  }
+  table th, .kami-table th {
+    text-align: left;
+    font-family: var(--sans);
+    font-weight: 500;
+    color: var(--dark-warm);
+    padding: 6pt 8pt;
+    border-bottom: 1pt solid var(--border);
+    background: var(--ivory);
+  }
+  table td, .kami-table td {
+    padding: 5pt 8pt;
+    border-bottom: 0.3pt solid var(--border-soft);
+    vertical-align: top;
+  }
+  table.striped tbody tr:nth-child(even) td, .kami-table.striped tbody tr:nth-child(even) td {
+    background: var(--ivory);
+  }
+
+  .callout {
+    background: var(--ivory);
+    border-left: 2pt solid var(--brand);
+    padding: 10pt 14pt;
+    border-radius: 3pt;
+    margin: 12pt 0;
+    line-height: 1.55;
+    break-inside: avoid;
+  }
+
+  .takeaway {
+    background: var(--ivory);
+    border-radius: 4pt;
+    padding: 10pt 14pt;
+    margin: 14pt 0;
+    break-inside: avoid;
+  }
+  .takeaway-label {
+    font-family: var(--sans);
+    font-size: 9pt;
+    color: var(--brand);
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin-bottom: 4pt;
+  }
+
+  .tag {
+    display: inline-block;
+    background: var(--tag-bg);
+    color: var(--brand);
+    font-family: var(--sans);
+    font-size: 9pt;
+    font-weight: 500;
+    padding: 1pt 6pt;
+    border-radius: 3pt;
+    letter-spacing: 0.4pt;
+    text-transform: uppercase;
+    margin-right: 4pt;
+  }
+
+  figure { margin: 14pt 0; break-inside: avoid; }
+  figure img { max-width: 100%; border-radius: 4pt; }
+  figcaption {
+    font-family: var(--sans);
+    font-size: 9pt;
+    color: var(--stone);
+    margin-top: 6pt;
+    text-align: center;
+  }
+
+  .chapter { break-before: page; }
+
+  /* COVER */
+  .cover {
+    min-height: 240mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 40mm 0 0 0;
+    break-after: page;
+  }
+  .cover-eyebrow {
+    font-family: var(--sans);
+    font-size: 10pt;
+    color: var(--brand);
+    letter-spacing: 2pt;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin-bottom: 18pt;
+  }
+  .cover-title {
+    font-size: 40pt;
+    font-weight: 500;
+    color: var(--near-black);
+    line-height: 1.12;
+    letter-spacing: -0.5pt;
+    margin-bottom: 16pt;
+  }
+  .cover-sub {
+    font-family: var(--sans);
+    font-size: 14pt;
+    color: var(--olive);
+    line-height: 1.45;
+    max-width: 85%;
+    margin-bottom: 30pt;
+  }
+  .cover-meta {
+    font-family: var(--sans);
+    font-size: 10pt;
+    color: var(--stone);
+    line-height: 1.55;
+    font-variant-numeric: tabular-nums;
+  }
+  .cover-meta strong { color: var(--dark-warm); font-weight: 500; }
+
+  /* TOC */
+  .toc { break-after: page; }
+  .toc h2 {
+    font-size: 22pt;
+    font-weight: 500;
+    margin-bottom: var(--rhythm-module);
+    border-left: 2.5pt solid var(--brand);
+    border-radius: 1.5pt;
+    padding-left: 8pt;
+  }
+  .toc-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6pt 0;
+    border-bottom: 0.3pt dotted var(--border);
+    font-size: 11pt;
+  }
+  .toc-item:last-of-type { border-bottom: none; }
+  .toc-num {
+    color: var(--brand);
+    font-weight: 500;
+    min-width: 30pt;
+    font-variant-numeric: tabular-nums;
+  }
+  .toc-title {
+    flex: 1;
+    color: var(--near-black);
+    padding-left: 6pt;
+  }
+  .toc-page {
+    color: var(--stone);
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     COVER
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="cover">
+  <div>
+    <div class="cover-eyebrow">Technical Documentation</div>
+    <div class="cover-title">Sinau Agentic<br>Architecture &amp; Flow</div>
+    <div class="cover-sub">A comprehensive guide to the agentic AI research platform: ReAct agent loop, nine-tool ecosystem, two-tier memory, RAG pipeline, and real-time SSE streaming between Flask and React.</div>
+  </div>
+  <div class="cover-meta">
+    <strong>Joskoding</strong><br>
+    v2.0 &middot; 2026.06<br>
+    Ollama + Flask + React + Vite
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     TABLE OF CONTENTS
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="toc">
+  <h2>Contents</h2>
+  <div class="toc-item"><span class="toc-num">01</span><span class="toc-title">Executive Summary</span><span class="toc-page">03</span></div>
+  <div class="toc-item"><span class="toc-num">02</span><span class="toc-title">System Architecture</span><span class="toc-page">04</span></div>
+  <div class="toc-item"><span class="toc-num">03</span><span class="toc-title">The ReAct Agent Loop</span><span class="toc-page">06</span></div>
+  <div class="toc-item"><span class="toc-num">04</span><span class="toc-title">Tool Ecosystem &amp; Garuda Integration</span><span class="toc-page">08</span></div>
+  <div class="toc-item"><span class="toc-num">05</span><span class="toc-title">Memory, RAG &amp; State Management</span><span class="toc-page">10</span></div>
+  <div class="toc-item"><span class="toc-num">06</span><span class="toc-title">SSE Streaming Pipeline</span><span class="toc-page">12</span></div>
+  <div class="toc-item"><span class="toc-num">07</span><span class="toc-title">Frontend Architecture</span><span class="toc-page">14</span></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 01 · EXECUTIVE SUMMARY
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="chapter">
+  <div class="chapter-num">01 &middot; Executive Summary</div>
+  <h1>Executive Summary</h1>
+
+  <p class="lead">
+    Sinau Agentic is a <span class="hl">teaching platform</span> that demonstrates how agentic AI systems work. It implements the ReAct pattern in a research assistant that can search the web, query Indonesian academic databases (Garuda), read PDFs, and synthesize answers &mdash; all through a local Ollama LLM with streaming real-time feedback to a React frontend.
+  </p>
+
+  <h2>Key Takeaways</h2>
+  <ul>
+    <li>The agent runs a <span class="hl">ReAct loop</span> (Reason + Act) for up to 7 steps per query, calling tools between LLM invocations.</li>
+    <li><span class="hl">Nine tools</span> form the ecosystem: web search, Garuda academic search (with parallel multi-keyword), PDF reading, webpage reading, note management, and internal thinking.</li>
+    <li>A <span class="hl">two-tier memory system</span> (conversation history + working memory) combined with cosine-similarity RAG via bge-m3 embeddings provides persistent context.</li>
+    <li>Real-time communication flows through <span class="hl">Server-Sent Events</span>: Flask yields typed event dicts; the React frontend consumes them via Fetch ReadableStream.</li>
+  </ul>
+
+  <div class="takeaway">
+    <div class="takeaway-label">Questions this document answers</div>
+    How does the ReAct loop orchestrate tool calls and final answers? What is the full architecture from browser to LLM? How do SSE events carry tool status and results to the UI? How does Garuda academic search with parallel multi-keyword queries work? What state does the agent preserve between user queries?
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 02 · SYSTEM ARCHITECTURE
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="chapter">
+  <div class="chapter-num">02 &middot; System Architecture</div>
+  <h1>System Architecture</h1>
+
+  <p class="lead">
+    The platform spans five layers: a React browser client, a Vite dev proxy, a threaded Flask server, the agentic Python runtime, and a local Ollama instance running two models &mdash; gemma4 for chat and bge-m3 for embeddings.
+  </p>
+
+  <h2>Five-Layer Stack</h2>
+  <p>Each layer has a distinct responsibility. The <span class="hl">Agent Core</span> is the focal layer where the ReAct loop, tool execution, and memory management live. Layers above carry presentation concerns; layers below carry infrastructure and model serving.</p>
+
+  <figure>
+    <svg viewBox="0 0 960 420" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="0.9" fill="#E3E2DC"/>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="#f5f4ed"/>
+      <rect width="100%" height="100%" fill="url(#dots)" opacity="0.55"/>
+
+      <!-- L1: React Frontend -->
+      <rect x="96" y="40" width="724" height="56" rx="4" fill="#faf9f5" stroke="#141413" stroke-width="1"/>
+      <text x="128" y="62" fill="#141413" font-size="7" font-family="'JetBrains Mono', monospace" letter-spacing="0.15em">01</text>
+      <text x="152" y="62" fill="#141413" font-size="12" font-weight="500" font-family="inherit">React Frontend</text>
+      <text x="152" y="82" fill="#504e49" font-size="9" font-family="'JetBrains Mono', monospace">Vite dev server &middot; port 5173 &middot; SSE consumer &middot; three-panel layout</text>
+
+      <!-- L2: Flask Server -->
+      <rect x="96" y="104" width="724" height="56" rx="4" fill="#f5f4ed" stroke="#504e49" stroke-width="1"/>
+      <text x="128" y="126" fill="#504e49" font-size="7" font-family="'JetBrains Mono', monospace" letter-spacing="0.15em">02</text>
+      <text x="152" y="126" fill="#141413" font-size="12" font-weight="500" font-family="inherit">Flask Server</text>
+      <text x="152" y="146" fill="#504e49" font-size="9" font-family="'JetBrains Mono', monospace">POST /api/chat &middot; POST /api/reset &middot; threaded mode &middot; port 5000</text>
+
+      <!-- L3: Agent Core (FOCAL) -->
+      <rect x="96" y="168" width="724" height="56" rx="4" fill="#EEF2F7" stroke="#1B365D" stroke-width="1"/>
+      <text x="128" y="190" fill="#1B365D" font-size="7" font-family="'JetBrains Mono', monospace" letter-spacing="0.15em">03 &middot; FOCAL</text>
+      <text x="224" y="190" fill="#141413" font-size="12" font-weight="500" font-family="inherit">Agent Core</text>
+      <text x="224" y="210" fill="#1B365D" font-size="9" font-family="'JetBrains Mono', monospace">ReAct loop &middot; 9 tools &middot; 2-tier memory &middot; RAG &middot; SSE generator</text>
+
+      <!-- L4: Ollama Runtime -->
+      <rect x="96" y="232" width="724" height="56" rx="4" fill="#f0efe8" stroke="#6b6a64" stroke-width="1"/>
+      <text x="128" y="254" fill="#6b6a64" font-size="7" font-family="'JetBrains Mono', monospace" letter-spacing="0.15em">04</text>
+      <text x="152" y="254" fill="#141413" font-size="12" font-weight="500" font-family="inherit">Ollama Runtime</text>
+      <text x="152" y="274" fill="#504e49" font-size="9" font-family="'JetBrains Mono', monospace">REST API &middot; localhost:11434 &middot; gemma4:latest (chat) &middot; bge-m3:latest (embed)</text>
+
+      <!-- L5: External Services -->
+      <rect x="96" y="296" width="724" height="56" rx="4" fill="#eae9e1" stroke="#b8b7b0" stroke-width="1"/>
+      <text x="128" y="318" fill="#b8b7b0" font-size="7" font-family="'JetBrains Mono', monospace" letter-spacing="0.15em">05</text>
+      <text x="152" y="318" fill="#141413" font-size="12" font-weight="500" font-family="inherit">External Services</text>
+      <text x="152" y="338" fill="#504e49" font-size="9" font-family="'JetBrains Mono', monospace">garuda.kemdiktisaintek.go.id &middot; DuckDuckGo &middot; web pages &middot; PDFs</text>
+
+      <!-- Left: REQUEST down -->
+      <line x1="52" y1="52" x2="52" y2="340" stroke="#504e49" stroke-width="1.2"/>
+      <path d="M 47,334 L 52,340 L 57,334" fill="none" stroke="#504e49" stroke-width="1.5" stroke-linecap="round"/>
+      <rect x="24" y="180" width="56" height="12" rx="2" fill="#f5f4ed"/>
+      <text x="52" y="190" fill="#504e49" font-size="8" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.1em">REQUEST</text>
+
+      <!-- Right: RESPONSE up -->
+      <line x1="872" y1="340" x2="872" y2="52" stroke="#1B365D" stroke-width="1.4"/>
+      <path d="M 867,58 L 872,52 L 877,58" fill="none" stroke="#1B365D" stroke-width="1.5" stroke-linecap="round"/>
+      <rect x="848" y="180" width="52" height="12" rx="2" fill="#f5f4ed"/>
+      <text x="872" y="190" fill="#1B365D" font-size="8" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.1em">RESPONSE</text>
+
+      <!-- Legend -->
+      <line x1="40" y1="372" x2="920" y2="372" stroke="#DEDED7" stroke-width="0.8"/>
+      <rect x="40" y="388" width="14" height="10" rx="2" fill="#EEF2F7" stroke="#1B365D" stroke-width="1"/>
+      <text x="60" y="396" fill="#504e49" font-size="8.5" font-family="inherit">Focal (Agent Core)</text>
+      <rect x="210" y="388" width="14" height="10" rx="2" fill="#faf9f5" stroke="#141413" stroke-width="1"/>
+      <text x="230" y="396" fill="#504e49" font-size="8.5" font-family="inherit">Presentation</text>
+      <rect x="360" y="388" width="14" height="10" rx="2" fill="#eae9e1" stroke="#b8b7b0" stroke-width="1"/>
+      <text x="380" y="396" fill="#504e49" font-size="8.5" font-family="inherit">Foundation &amp; External</text>
+      <line x1="560" y1="394" x2="592" y2="394" stroke="#1B365D" stroke-width="1.4"/>
+      <path d="M 586,390 L 592,394 L 586,398" fill="none" stroke="#1B365D" stroke-width="1.5" stroke-linecap="round"/>
+      <text x="600" y="397" fill="#504e49" font-size="8.5" font-family="inherit">SSE stream</text>
+    </svg>
+    <figcaption>Figure 1. The five-layer architecture with the Agent Core as the focal layer. Request flow descends through Vite proxy to Flask; SSE events stream back up through the same path.</figcaption>
+  </figure>
+
+  <h2>Technology Choices</h2>
+  <table class="striped">
+    <thead>
+      <tr><th>Component</th><th>Technology</th><th>Rationale</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>LLM</td><td>Ollama + gemma4:latest</td><td>Local, no API keys, fast tool-calling support</td></tr>
+      <tr><td>Embeddings</td><td>Ollama + bge-m3:latest</td><td>Multilingual, strong on Indonesian-English mixed text</td></tr>
+      <tr><td>Backend</td><td>Flask 3.0 (threaded)</td><td>Lightweight, native SSE generator support</td></tr>
+      <tr><td>Frontend</td><td>Vite + React 19</td><td>Fast HMR, API proxy to Flask, no SSR needed</td></tr>
+      <tr><td>Streaming</td><td>Server-Sent Events</td><td>Unidirectional server-to-client; simpler than WebSocket for this use case</td></tr>
+      <tr><td>Web Search</td><td>DuckDuckGo (ddgs)</td><td>No API key, privacy-respecting, returns text snippets</td></tr>
+      <tr><td>PDF Reading</td><td>pypdf</td><td>Pure Python, extracts text + references from academic papers</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 03 · THE REACT AGENT LOOP
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="chapter">
+  <div class="chapter-num">03 &middot; The ReAct Agent Loop</div>
+  <h1>The ReAct Agent Loop</h1>
+
+  <p class="lead">
+    The agent uses the <span class="hl">ReAct</span> pattern: it reasons about what to do next, acts by calling a tool, observes the result, and feeds that observation back into its reasoning. This cycle repeats until the LLM produces a final answer or hits the 7-step cap.
+  </p>
+
+  <h2>Loop Mechanics</h2>
+  <p>Each iteration sends the full conversation history (system prompt + user message + all prior tool calls and results) to Ollama. The LLM returns one of two outcomes: a set of <code>tool_calls</code> (the agent must execute tools and loop back) or a <code>content</code> string (the final answer). The loop enforces a max of 7 steps; if the LLM still calls tools at step 7, a forced-final-answer prompt is injected.</p>
+
+  <div class="callout">
+    The agent never decides which tool to call next &mdash; the LLM does. The agent&rsquo;s job is to execute whatever the model requests, format the result, and feed it back. This is the essence of the ReAct pattern: the LLM is the brain; the agent is the hands.
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 860 500" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#504e49"/>
+        </marker>
+        <marker id="arrow-brand" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#1B365D"/>
+        </marker>
+      </defs>
+      <rect width="100%" height="100%" fill="#f5f4ed"/>
+
+      <!-- Start → Build Messages -->
+      <line x1="430" y1="60" x2="430" y2="96" stroke="#504e49" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <!-- Build Messages → Chat with LLM -->
+      <line x1="430" y1="160" x2="430" y2="196" stroke="#504e49" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <!-- Chat → Decision (focal) -->
+      <line x1="430" y1="260" x2="430" y2="296" stroke="#504e49" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <!-- Decision → Tool branch -->
+      <path d="M 360 348 L 200 348 L 200 416" fill="none" stroke="#1B365D" stroke-width="1.4" marker-end="url(#arrow-brand)"/>
+      <rect x="170" y="364" width="34" height="14" rx="2" fill="#f5f4ed"/>
+      <text x="187" y="374" fill="#1B365D" font-size="8" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.12em">YES</text>
+
+      <!-- Decision → Answer branch -->
+      <path d="M 500 348 L 660 348 L 660 416" fill="none" stroke="#504e49" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="636" y="364" width="30" height="14" rx="2" fill="#f5f4ed"/>
+      <text x="651" y="374" fill="#504e49" font-size="8" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.12em">NO</text>
+
+      <!-- Tool branch → loop back -->
+      <path d="M 200 480 L 200 520 L 96 520 L 96 128 L 96 128 L 96 288 L 360 288" fill="none" stroke="#504e49" stroke-width="1.2" stroke-dasharray="6,3"/>
+      <rect x="172" y="510" width="76" height="14" rx="2" fill="#f5f4ed"/>
+      <text x="210" y="520" fill="#504e49" font-size="8" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.1em">FEED BACK</text>
+
+      <!-- Nodes -->
+      <!-- Start -->
+      <rect x="360" y="28" width="140" height="32" rx="16" fill="#E9E8E1" stroke="#6b6a64" stroke-width="1"/>
+      <text x="430" y="46" fill="#141413" font-size="11" font-family="inherit" text-anchor="middle">User Query</text>
+
+      <!-- Build Messages -->
+      <rect x="350" y="96" width="160" height="64" rx="6" fill="#faf9f5" stroke="#141413" stroke-width="1"/>
+      <text x="364" y="114" fill="#504e49" font-size="7" font-family="'JetBrains Mono', monospace" letter-spacing="0.15em">STEP 01</text>
+      <text x="430" y="134" fill="#141413" font-size="12" font-weight="500" font-family="inherit" text-anchor="middle">Build Messages</text>
+      <text x="430" y="150" fill="#504e49" font-size="9" font-family="inherit" text-anchor="middle">system + history + tools</text>
+
+      <!-- Chat with LLM -->
+      <rect x="350" y="196" width="160" height="64" rx="6" fill="#faf9f5" stroke="#141413" stroke-width="1"/>
+      <text x="364" y="214" fill="#504e49" font-size="7" font-family="'JetBrains Mono', monospace" letter-spacing="0.15em">STEP 02</text>
+      <text x="430" y="234" fill="#141413" font-size="12" font-weight="500" font-family="inherit" text-anchor="middle">Ollama Chat</text>
+      <text x="430" y="250" fill="#504e49" font-size="9" font-family="inherit" text-anchor="middle">POST /api/chat &middot; gemma4</text>
+
+      <!-- Decision diamond (FOCAL) -->
+      <polygon points="430,296 500,322 500,348 430,400 360,348 360,322" fill="#EEF2F7" stroke="#1B365D" stroke-width="1.2"/>
+      <text x="430" y="346" fill="#141413" font-size="11" font-weight="500" font-family="inherit" text-anchor="middle">Has tool_calls?</text>
+      <text x="430" y="362" fill="#1B365D" font-size="8" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.15em">BRANCH</text>
+
+      <!-- Tool execution -->
+      <rect x="120" y="416" width="160" height="64" rx="6" fill="#faf9f5" stroke="#141413" stroke-width="1"/>
+      <text x="134" y="434" fill="#504e49" font-size="7" font-family="'JetBrains Mono', monospace" letter-spacing="0.15em">STEP 03</text>
+      <text x="200" y="454" fill="#141413" font-size="12" font-weight="500" font-family="inherit" text-anchor="middle">Execute Tools</text>
+      <text x="200" y="470" fill="#504e49" font-size="9" font-family="inherit" text-anchor="middle">run &middot; add to history</text>
+
+      <!-- Answer -->
+      <rect x="580" y="416" width="160" height="64" rx="6" fill="#f0efe8" stroke="#6b6a64" stroke-width="1"/>
+      <text x="594" y="434" fill="#6b6a64" font-size="7" font-family="'JetBrains Mono', monospace" letter-spacing="0.15em">FINAL</text>
+      <text x="660" y="454" fill="#141413" font-size="12" font-weight="500" font-family="inherit" text-anchor="middle">Yield Answer</text>
+      <text x="660" y="470" fill="#504e49" font-size="9" font-family="inherit" text-anchor="middle">SSE: answer event</text>
+    </svg>
+    <figcaption>Figure 2. The ReAct loop with the tool-call decision as the focal branch. When tool_calls are present, the agent executes them and feeds results back into the next iteration. When absent, the content is yielded as the final SSE answer event.</figcaption>
+  </figure>
+
+  <h2>Key Implementation Details</h2>
+  <p>The loop lives in <code>AgenticResearch.research_stream()</code> (<code>agent.py:102</code>), a Python generator that yields typed event dicts. Two versions exist: <code>research()</code> for CLI output and <code>research_stream()</code> for SSE streaming. Both share the same core logic but differ in how they emit progress.</p>
+
+  <pre><code class="language-python">def research_stream(self, query):
+    yield {"type": "user", "content": query}
+    self.memory.add_user_message(query)
+
+    for step in range(1, self.max_steps + 1):
+        yield {"type": "step", "step": step, "max": self.max_steps}
+        messages = self.memory.build_messages()
+        response = chat(messages, tools=self.tools)
+
+        if response.get("tool_calls"):
+            for tc in response["tool_calls"]:
+                func = tc["function"]
+                tool_name = func["name"]
+                tool_args = func.get("arguments", {})
+                yield {"type": "tool_call", "name": tool_name, "args": tool_args}
+                result = execute_tool(tool_name, tool_args)
+                yield {"type": "tool_result", "name": tool_name, "result": result[:800]}
+                self.memory.add_tool_call(tool_name, tool_args)
+                self.memory.add_tool_result(tool_name, result)
+            continue  # loop back to LLM
+
+        answer = (response.get("content") or "").strip()
+        if not answer:
+            # retry once with explicit prompt
+            ...
+        self.memory.add_assistant_message(answer)
+        yield {"type": "answer", "content": answer}
+        return</code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 04 · TOOL ECOSYSTEM
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="chapter">
+  <div class="chapter-num">04 &middot; Tool Ecosystem</div>
+  <h1>Tool Ecosystem &amp; Garuda Integration</h1>
+
+  <p class="lead">
+    Nine tools form the agent&rsquo;s action repertoire. Each is defined with an OpenAI-compatible JSON schema in <code>tools.py</code> and dispatched through a unified <code>execute_tool()</code> function. The Garuda academic search tools are the platform&rsquo;s differentiator, providing access to Indonesia&rsquo;s national research database.
+  </p>
+
+  <h2>Tool Inventory</h2>
+  <table class="striped">
+    <thead>
+      <tr><th>#</th><th>Tool</th><th>Source</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td><span class="hl">web_search</span></td><td>DuckDuckGo</td><td>General web search returning title + snippet + URL</td></tr>
+      <tr><td>2</td><td><span class="hl">read_webpage</span></td><td>requests + BeautifulSoup</td><td>Fetch and extract text content from any URL</td></tr>
+      <tr><td>3</td><td><span class="hl">garuda_search</span></td><td>garuda.kemdiktisaintek.go.id</td><td>Single-keyword search of Indonesian academic publications</td></tr>
+      <tr><td>4</td><td><span class="hl">garuda_multi_search</span></td><td>Garuda (parallel)</td><td>Multi-keyword parallel search via ThreadPoolExecutor; 3&ndash;5 queries in one call</td></tr>
+      <tr><td>5</td><td><span class="hl">garuda_detail</span></td><td>Garuda detail page</td><td>Full metadata: authors, journal, DOI, abstract, download link</td></tr>
+      <tr><td>6</td><td><span class="hl">garuda_read_pdf</span></td><td>pypdf + HTTP download</td><td>Download PDF, extract body text + references (daftar pustaka)</td></tr>
+      <tr><td>7</td><td><span class="hl">save_note</span></td><td>Working memory</td><td>Store a key-value fact for later recall</td></tr>
+      <tr><td>8</td><td><span class="hl">recall_note / list_notes</span></td><td>Working memory</td><td>Retrieve or enumerate stored facts</td></tr>
+      <tr><td>9</td><td><span class="hl">think</span></td><td>Internal</td><td>Scratchpad for the LLM to plan between tool calls</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Garuda Multi-Search</h2>
+  <p>The most architecturally interesting tool. Instead of a single search, <code>garuda_multi_search</code> accepts an array of <span class="hl">3&ndash;5 keyword variations</span> and executes them in parallel via <code>concurrent.futures.ThreadPoolExecutor</code>. Results are deduplicated by Garuda ID and returned as a unified, ranked list. This approach dramatically improves recall for Indonesian-language queries where keyword variance is high.</p>
+
+  <div class="callout">
+    The system prompt instructs the LLM to break user queries into specific keyword angles: main topic, location/context, impact/effect, and synonyms in both English and Indonesian. A query like &ldquo;renewable energy in Dieng&rdquo; becomes [&ldquo;renewable energy Dieng&rdquo;, &ldquo;energi terbarukan Dieng&rdquo;, &ldquo;dampak geothermal Dieng&rdquo;, &ldquo;renewable energy impact highland&rdquo;].
+  </div>
+
+  <h2>Paper Parsing Pipeline</h2>
+  <p>Results from Garuda searches are parsed into structured paper objects via <code>_parse_papers_from_result()</code> (<code>agent.py:167</code>). A regex extracts <span class="hl">index, title, authors, journal, DOI, and Garuda ID</span> from the formatted search output. These structured objects flow through SSE <code>tool_result</code> events to populate the frontend Papers panel.</p>
+
+  <pre><code class="language-python">papers.append({
+    "index":     m.group(1),
+    "title":     m.group(2).strip(),
+    "authors":   m.group(3).strip(),
+    "journal":   (m.group(4) or "").strip(),
+    "doi":       (m.group(5) or "").strip(),
+    "garuda_id": m.group(6).strip(),
+})</code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 05 · MEMORY, RAG & STATE
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="chapter">
+  <div class="chapter-num">05 &middot; Memory &amp; RAG</div>
+  <h1>Memory, RAG &amp; State Management</h1>
+
+  <p class="lead">
+    The agent maintains state across two dimensions: <span class="hl">conversation history</span> (short-term, per-session) and <span class="hl">RAG-backed knowledge retrieval</span> (semantic, cosine-similarity search over embedded notes). A third layer, session isolation, keeps multi-user state clean in the Flask server.
+  </p>
+
+  <h2>Two-Tier Memory</h2>
+  <p>The <code>AgentMemory</code> class (<code>memory.py</code>) manages two distinct stores:</p>
+
+  <table class="striped">
+    <thead>
+      <tr><th>Tier</th><th>Store</th><th>Persistence</th><th>Use</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1. Conversation History</td><td><code>self.history</code> (list of message dicts)</td><td>Session lifetime</td><td>Full message log: user, assistant, tool_call, tool_result roles</td></tr>
+      <tr><td>2. Working Memory</td><td><code>self.working</code> (dict key-value)</td><td>Session lifetime</td><td>Facts saved via <code>save_note</code>, recalled via <code>recall_note</code></td></tr>
+    </tbody>
+  </table>
+
+  <p>The <code>build_messages()</code> method prepends the system prompt to the full history before sending to Ollama. Every tool call and its result is recorded as a structured message, giving the LLM full context of what has been explored so far.</p>
+
+  <h2>RAG Pipeline</h2>
+  <p>When the agent calls <code>save_note</code>, the note is also embedded via <span class="hl">bge-m3:latest</span> and stored as a numpy vector in the <code>RAG</code> class (<code>rag.py</code>). On <code>rag_query()</code>, the query text is embedded and cosine similarity is computed against all stored vectors to return the <code>top_k</code> most relevant documents.</p>
+
+  <pre><code class="language-python">class RAG:
+    def __init__(self):
+        self.documents = []
+        self.embeddings = None  # numpy array
+
+    def add(self, text):
+        self.documents.append(text)
+        emb = embed([text])[0]
+        if self.embeddings is None:
+            self.embeddings = np.array([emb])
+        else:
+            self.embeddings = np.vstack([self.embeddings, emb])
+
+    def query(self, query_text, top_k=3):
+        q_emb = embed([query_text])[0]
+        similarities = np.dot(self.embeddings, q_emb)
+        top_indices = np.argsort(similarities)[-top_k:][::-1]
+        return [self.documents[i] for i in top_indices]</code></pre>
+
+  <h2>Session Isolation</h2>
+  <p>Flask&rsquo;s <code>server.py</code> maintains an in-memory <code>sessions</code> dict mapping session IDs to <code>AgenticResearch</code> instances. Each new session (triggered by &ldquo;New Chat&rdquo; in the frontend) calls <code>POST /api/reset</code> to clear the agent from the dict, then creates a fresh instance on the next <code>/api/chat</code> call. Sessions are scoped per browser session; there is no cross-session persistence.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 06 · SSE STREAMING PIPELINE
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="chapter">
+  <div class="chapter-num">06 &middot; SSE Streaming Pipeline</div>
+  <h1>SSE Streaming Pipeline</h1>
+
+  <p class="lead">
+    Real-time communication between the Flask backend and React frontend runs over <span class="hl">Server-Sent Events</span>. The agent&rsquo;s generator yields typed event dicts; Flask wraps them in SSE <code>data:</code> lines; the React frontend consumes them via the Fetch API&rsquo;s <code>ReadableStream</code> reader.
+  </p>
+
+  <h2>Backend: Generator to SSE</h2>
+  <p>The <code>POST /api/chat</code> endpoint (<code>server.py:20</code>) creates an inner generator that iterates over <code>agent.research_stream(query)</code>, serializes each event dict as JSON, and wraps it in the SSE wire format:</p>
+
+  <pre><code class="language-python">def generate():
+    for event in agent.research_stream(query):
+        yield f"data: {json.dumps(event)}\n\n"
+    yield 'data: {"type": "done"}\n\n'
+
+return Response(generate(), mimetype="text/event-stream")</code></pre>
+
+  <h2>Event Type Reference</h2>
+  <table class="striped">
+    <thead>
+      <tr><th>Event</th><th>Payload</th><th>When Emitted</th><th>Frontend Action</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>user</code></td><td><code>{type, content}</code></td><td>Query received</td><td>(internal)</td></tr>
+      <tr><td><code>step</code></td><td><code>{type, step, max}</code></td><td>Each loop iteration</td><td>Updates status bar step counter</td></tr>
+      <tr><td><code>tool_call</code></td><td><code>{type, name, args}</code></td><td>LLM requests a tool</td><td>Adds running badge to tool status bar</td></tr>
+      <tr><td><code>tool_result</code></td><td><code>{type, name, result, papers}</code></td><td>Tool completes</td><td>Marks badge done; pushes papers to panel</td></tr>
+      <tr><td><code>answer</code></td><td><code>{type, content}</code></td><td>Final LLM response</td><td>Appends agent message to chat</td></tr>
+      <tr><td><code>done</code></td><td><code>{type: "done"}</code></td><td>Stream end marker</td><td>(internal; triggers <code>finally</code> cleanup)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Frontend: SSE Consumption</h2>
+  <p>The SSE spec&rsquo;s native <code>EventSource</code> API only supports GET requests. Since the agent needs POST (to send the query and session ID in the body), the frontend uses <code>fetch()</code> with a <code>ReadableStream</code> reader instead:</p>
+
+  <pre><code class="language-javascript">const res = await fetch('/api/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ query, session: String(activeId) }),
+})
+const reader = res.body.getReader()
+const decoder = new TextDecoder()
+let buffer = ''
+
+while (true) {
+  const { done, value } = await reader.read()
+  if (done) break
+  buffer += decoder.decode(value, { stream: true })
+  const lines = buffer.split('\n\n')
+  buffer = lines.pop() || ''
+
+  for (const line of lines) {
+    if (!line.startsWith('data: ')) continue
+    const data = JSON.parse(line.slice(6))
+    // dispatch by data.type → React setState
+  }
+}</code></pre>
+
+  <div class="callout">
+    The <code>buffer</code> variable is essential: SSE chunks can arrive mid-event. The code accumulates partial data across <code>read()</code> calls, splits on <code>\n\n</code> (the SSE event delimiter), and keeps the trailing partial chunk in <code>buffer</code> for the next iteration. Without this, partial JSON would throw parse errors on every chunk boundary.
+  </div>
+
+  <h2>Vite Proxy</h2>
+  <p>The Vite dev server proxies <code>/api</code> requests to <code>http://127.0.0.1:5000</code> (configured in <code>vite.config.js</code>). This avoids CORS issues in development and keeps the frontend and backend on the same origin from the browser&rsquo;s perspective.</p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     CHAPTER 07 · FRONTEND ARCHITECTURE
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="chapter">
+  <div class="chapter-num">07 &middot; Frontend Architecture</div>
+  <h1>Frontend Architecture</h1>
+
+  <p class="lead">
+    The React frontend (<code>App.jsx</code>, 463 lines) is a single-page application with <span class="hl">three-panel layout</span>: a session sidebar, a chat area with streaming indicators, and a papers panel. It consumes SSE events via Fetch ReadableStream and manages multi-session state entirely in React hooks.
+  </p>
+
+  <h2>Component Structure</h2>
+  <p>The entire app is a single <code>App</code> component with no child components. State is managed through seven <code>useState</code> hooks and three <code>useRef</code> hooks for real-time sync during streaming:</p>
+
+  <table class="striped">
+    <thead>
+      <tr><th>State</th><th>Type</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>sessions</code></td><td>Array of session objects</td><td>All chat sessions: each has id, title, messages[], papers[]</td></tr>
+      <tr><td><code>activeId</code></td><td>Number (timestamp)</td><td>Currently selected session</td></tr>
+      <tr><td><code>input</code></td><td>String</td><td>Controlled input value with @mention support</td></tr>
+      <tr><td><code>streaming</code></td><td>Boolean</td><td>SSE stream active flag (disables input, shows dots)</td></tr>
+      <tr><td><code>toolStatus</code></td><td>Array of {name, state, key}</td><td>Tool execution badges: running → done</td></tr>
+      <tr><td><code>step</code></td><td>{current, max}</td><td>Current ReAct iteration for status bar</td></tr>
+      <tr><td><code>showMention / mentionIndex / mentionItems</code></td><td>@ autocomplete state</td><td>Dropdown for paper mentions and followups</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Three-Panel Layout</h2>
+
+  <h3>Left: Session Sidebar (240px)</h3>
+  <p>Lists all sessions by title. Each session stores its own messages and papers independently. The &ldquo;New Chat&rdquo; button calls <code>POST /api/reset</code> to clear the backend session, then creates a new frontend session entry. Switching sessions resets tool status and step indicators.</p>
+
+  <h3>Center: Chat Area</h3>
+  <p>Messages render as user/agent pairs with avatar circles (&ldquo;U&rdquo; / &ldquo;AI&rdquo;). User messages use a right-aligned bubble with <code>border-radius: 12px 12px 4px 12px</code>. Agent messages split content by <code>\n</code> into <code>&lt;p&gt;</code> tags. During streaming, a loading indicator shows three animated dots next to the &ldquo;AI&rdquo; avatar, which disappears once the <code>answer</code> SSE event arrives. Four followup suggestion buttons appear below the last agent message.</p>
+
+  <div class="callout">
+    Performance note: the <code>send</code> function is wrapped in <code>useCallback(fn, [])</code> to avoid recreating the event handler on every keystroke. Refs mirror <code>input</code>, <code>streaming</code>, and <code>activeId</code> state so the callback always reads the latest values without depending on React state.
+  </div>
+
+  <h3>Right: Papers Panel (320px)</h3>
+  <p>Displays papers parsed from Garuda search results. Each paper card links to <code>garuda.kemdiktisaintek.go.id/documents/detail/{garuda_id}</code>. Papers are deduplicated by Garuda ID as they arrive through <code>tool_result</code> events. The @mention autocomplete scans this panel&rsquo;s papers for inline references.</p>
+
+  <h2>@Mention System</h2>
+  <p>Typing <code>@</code> in the input triggers an autocomplete dropdown with three categories of suggestions: papers from the current session (filtered by title/author match), an &ldquo;Elaborate&rdquo; action, and four pre-defined follow-up questions. Selection replaces the <code>@query</code> text with the chosen item. Navigation uses ArrowUp/ArrowDown/Tab/Enter/Escape.</p>
+
+  <h2>Styling</h2>
+  <p>The UI uses a Cal.com-inspired design system defined as CSS custom properties in <code>index.css</code>: warm parchment backgrounds (<code>--canvas</code>), card surfaces (<code>--surface-card</code>), and ink-dark accents (<code>--ink</code>). Tailwind CSS 4 provides utility classes; custom animations (<code>fade-up</code>, <code>pulse-dot</code>) handle message entrance and loading indicators.</p>
+
+  <div class="takeaway">
+    <div class="takeaway-label">Key Design Decisions</div>
+    Single-component architecture avoids prop-drilling overhead for a three-panel app. Refs-for-streaming pattern keeps the SSE callback stable across re-renders. Papers deduplication by Garuda ID prevents duplicate entries when multiple searches return overlapping results.
+  </div>
+</section>
+
+</body>
+</html>
